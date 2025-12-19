@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>THENA — UI</title>
+  <style>
+    :root{
+      --bg1:#0b1220; --bg2:#0a2a3b;
+      --card: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.10);
+      --txt:#eaf2ff; --muted:rgba(234,242,255,.7);
+      --btn:#3b82f6; --btn2:#111827;
+      --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--txt);
+      background: radial-gradient(1200px 700px at 20% 20%, #1b3a66 0%, transparent 60%),
+                  radial-gradient(1200px 700px at 80% 30%, #0f6b6b 0%, transparent 60%),
+                  linear-gradient(180deg, var(--bg1), var(--bg2));
+      min-height:100vh;
+    }
+    header{
+      padding:28px 22px 10px;
+      max-width:1100px; margin:0 auto;
+      display:flex; justify-content:space-between; align-items:flex-end; gap:12px;
+    }
+    h1{margin:0; letter-spacing:.5px}
+    .sub{color:var(--muted); margin-top:6px; font-size:14px}
+    main{max-width:1100px; margin:0 auto; padding:18px 22px 40px; display:grid; gap:16px}
+    .grid{display:grid; grid-template-columns: 420px 1fr; gap:16px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--stroke);
+      border-radius:16px;
+      padding:16px;
+      backdrop-filter: blur(10px);
+    }
+    .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    label{display:block; font-size:12px; color:var(--muted); margin:10px 0 6px}
+    input, select, textarea{
+      width:100%;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      color:var(--txt);
+      outline:none;
+    }
+    textarea{min-height:92px; resize:vertical}
+    .btns{display:flex; gap:10px; margin-top:12px}
+    button{
+      cursor:pointer; border:0; border-radius:12px; padding:12px 14px; font-weight:600;
+      background:var(--btn); color:white;
+    }
+    button.secondary{background:rgba(255,255,255,.10); color:var(--txt)}
+    button.danger{background:rgba(239,68,68,.18); color:#ffd6d6; border:1px solid rgba(239,68,68,.35)}
+    .toast{
+      margin-top:10px; padding:10px 12px; border-radius:12px; font-size:14px;
+      background: rgba(16,185,129,.10); border:1px solid rgba(16,185,129,.25); color:#bfffe7;
+      display:none;
+    }
+    .toast.err{
+      background: rgba(239,68,68,.10); border:1px solid rgba(239,68,68,.25); color:#ffd6d6;
+    }
+    .list{display:grid; gap:10px; margin-top:10px}
+    .item{
+      padding:12px; border-radius:14px; border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.15);
+      display:flex; justify-content:space-between; gap:10px; align-items:center;
+    }
+    .title{font-weight:800}
+    .meta{color:var(--muted); font-size:13px; margin-top:4px}
+    .pill{
+      display:inline-flex; gap:6px; align-items:center;
+      padding:6px 10px; border-radius:999px;
+      background: rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.12);
+      font-size:12px; color:var(--txt);
+      margin-right:8px;
+    }
+    .actions{display:flex; gap:8px; align-items:center}
+    .small{padding:9px 10px; font-size:12px; border-radius:10px}
+    .split{height:1px; background:rgba(255,255,255,.10); margin:12px 0}
+    .suggestions{
+      position:relative;
+    }
+    .suggestBox{
+      position:absolute; z-index:10; left:0; right:0; top:100%;
+      background:#0b1528;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:14px;
+      overflow:hidden;
+      display:none;
+      margin-top:6px;
+    }
+    .suggestRow{
+      padding:10px 12px; cursor:pointer;
+      border-top:1px solid rgba(255,255,255,.08);
+    }
+    .suggestRow:hover{background:rgba(255,255,255,.06)}
+    .sMain{font-weight:700}
+    .sSub{color:var(--muted); font-size:12px; margin-top:2px}
+    @media (max-width: 980px){
+      .grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>THENA</h1>
+    <div class="sub">UI pro — recherche Google + création d’établissements + reviews (sans afficher le backend)</div>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <div class="card">
+      <div class="title">Créer un établissement</div>
+      <div class="meta">Recherche Google (autocomplete) → remplit Nom + Ville automatiquement.</div>
+
+      <label>Recherche (Google)</label>
+      <div class="suggestions">
+        <input id="gSearch" placeholder="Ex: Irish Pub Chamonix" autocomplete="off"/>
+        <div id="suggestBox" class="suggestBox"></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Nom</label>
+          <input id="name" placeholder="Nom de l'établissement"/>
+        </div>
+        <div>
+          <label>Ville</label>
+          <input id="city" placeholder="Ville"/>
+        </div>
+      </div>
+
+      <label>Catégorie</label>
+      <select id="category">
+        <option value="restaurant">restaurant</option>
+        <option value="bar">bar</option>
+        <option value="hotel">hotel</option>
+        <option value="cafe">cafe</option>
+        <option value="nightclub">nightclub</option>
+        <option value="other">other</option>
+      </select>
+
+      <div class="btns">
+        <button id="createBtn">Créer</button>
+        <button class="secondary" id="refreshBtn">Rafraîchir la liste</button>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <div class="title">Établissements</div>
+          <div class="meta">Cartes propres. Pas de JSON.</div>
+        </div>
+        <button class="secondary" id="loadBtn">Charger</button>
+      </div>
+
+      <div class="split"></div>
+
+      <div class="row">
+        <div>
+          <label>Filtrer par ville</label>
+          <input id="fCity" placeholder="ex: Chamonix"/>
+        </div>
+        <div>
+          <label>Filtrer par catégorie</label>
+          <input id="fCat" placeholder="ex: restaurant"/>
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="secondary" id="filterBtn">Appliquer filtres</button>
+        <button class="secondary" id="clearBtn">Reset</button>
+      </div>
+
+      <div id="list" class="list"></div>
+    </div>
+  </div>
+
+  <div class="card" id="reviewCard" style="display:none">
+    <div class="title" id="reviewTitle">Ajouter une review</div>
+    <div class="meta" id="reviewMeta"></div>
+
+    <div class="row">
+      <div>
+        <label>Note (1–5)</label>
+        <select id="rating">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+      <div>
+        <label>Tags (virgules)</label>
+        <input id="tags" placeholder="ex: toxic_management, unpaid_hours, harassment"/>
+      </div>
+    </div>
+
+    <label>Commentaire</label>
+    <textarea id="comment" placeholder="Décris le problème (heures sup non payées, harcèlement, etc.)"></textarea>
+
+    <div class="btns">
+      <button id="sendReviewBtn">Publier</button>
+      <button class="secondary" id="cancelReviewBtn">Annuler</button>
+    </div>
+
+    <div id="toast2" class="toast"></div>
+  </div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  let selectedEstablishmentId = null;
+  let selectedEstablishmentLabel = "";
+
+  function toast(el, msg, isErr=false){
+    el.textContent = msg;
+    el.className = "toast" + (isErr ? " err" : "");
+    el.style.display = "block";
+    setTimeout(()=>{ el.style.display="none"; }, 3200);
+  }
+
+  async function api(path, opts={}){
+    const r = await fetch(path, opts);
+    const ct = r.headers.get("content-type") || "";
+    let data = null;
+    if (ct.includes("application/json")) data = await r.json().catch(()=>null);
+    else data = await r.text().catch(()=>null);
+
+    if (!r.ok) {
+      const msg = (data && (data.detail || data.error || data.raw)) ? JSON.stringify(data) : (data || "Erreur");
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  // ========== GOOGLE AUTOCOMPLETE ==========
+  let suggestTimer = null;
+
+  $("gSearch").addEventListener("input", () => {
+    clearTimeout(suggestTimer);
+    const q = $("gSearch").value.trim();
+    if (q.length < 2) {
+      $("suggestBox").style.display = "none";
+      $("suggestBox").innerHTML = "";
+      return;
+    }
+    suggestTimer = setTimeout(()=>loadSuggestions(q), 250);
+  });
+
+  async function loadSuggestions(q){
+    try{
+      const res = await api(`/api/google/autocomplete?q=${encodeURIComponent(q)}`);
+      const box = $("suggestBox");
+      const preds = (res && res.predictions) || [];
+      if (!preds.length){
+        box.style.display = "none";
+        box.innerHTML = "";
+        return;
+      }
+      box.innerHTML = preds.map(p => `
+        <div class="suggestRow" data-place="${p.place_id}">
+          <div class="sMain">${escapeHtml(p.main_text || p.description)}</div>
+          <div class="sSub">${escapeHtml(p.secondary_text || "")}</div>
+        </div>
+      `).join("");
+      box.style.display = "block";
+
+      box.querySelectorAll(".suggestRow").forEach(row => {
+        row.addEventListener("click", async () => {
+          const placeId = row.getAttribute("data-place");
+          $("suggestBox").style.display = "none";
+          $("suggestBox").innerHTML = "";
+          await pickPlace(placeId);
+        });
+      });
+    }catch(e){
+      // on n'affiche pas de JSON, juste un message
+      toast($("toast"), "Google: erreur de recherche (vérifie la clé / APIs activées).", true);
+      $("suggestBox").style.display = "none";
+    }
+  }
+
+  async function pickPlace(placeId){
+    const res = await api(`/api/google/place?place_id=${encodeURIComponent(placeId)}`);
+    const p = res.place;
+    $("name").value = p.name || "";
+    $("city").value = p.city || "";
+    $("gSearch").value = (p.name ? p.name : "") + (p.city ? (" — " + p.city) : "");
+    toast($("toast"), "Lieu Google sélectionné ✅");
+  }
+
+  // ========== ESTABLISHMENTS ==========
+  $("createBtn").addEventListener("click", async () => {
+    const name = $("name").value.trim();
+    const city = $("city").value.trim();
+    const category = $("category").value.trim();
+
+    if (!name || !city || !category){
+      toast($("toast"), "Remplis Nom + Ville + Catégorie.", true);
+      return;
+    }
+
+    try{
+      await api("/establishments", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ name, city, category })
+      });
+      toast($("toast"), "Créé ✅");
+      $("gSearch").value = "";
+      await loadList();
+    }catch(e){
+      toast($("toast"), "Erreur création (check terminal).", true);
+    }
+  });
+
+  $("loadBtn").addEventListener("click", loadList);
+  $("refreshBtn").addEventListener("click", loadList);
+
+  $("filterBtn").addEventListener("click", loadList);
+  $("clearBtn").addEventListener("click", () => {
+    $("fCity").value = "";
+    $("fCat").value = "";
+    loadList();
+  });
+
+  async function loadList(){
+    const city = $("fCity").value.trim();
+    const category = $("fCat").value.trim();
+
+    const qs = new URLSearchParams();
+    if (city) qs.set("city", city);
+    if (category) qs.set("category", category);
+
+    try{
+      const res = await api("/establishments" + (qs.toString() ? ("?" + qs.toString()) : ""));
+      const list = Array.isArray(res) ? res : (res.data || []);
+      renderList(list);
+    }catch(e){
+      renderList([]);
+    }
+  }
+
+  function renderList(items){
+    const wrap = $("list");
+    if (!items.length){
+      wrap.innerHTML = `<div class="meta">Aucun résultat.</div>`;
+      return;
+    }
+    wrap.innerHTML = items.map(it => `
+      <div class="item">
+        <div>
+          <div class="title">#${it.id} — ${escapeHtml(it.name)}</div>
+          <div class="meta">
+            <span class="pill">${escapeHtml(it.city)}</span>
+            <span class="pill">${escapeHtml(it.category)}</span>
+            <span class="pill">⭐ ${Math.round((it.avg_rating || 0)*10)/10} (${it.review_count || 0} avis)</span>
+          </div>
+          <div class="meta">${(it.top_tags && it.top_tags.length) ? ("Signaux: " + it.top_tags.map(t=>escapeHtml(t)).join(", ")) : "Aucun signal pour l'instant"}</div>
+        </div>
+        <div class="actions">
+          <button class="secondary small" onclick="openReview(${it.id}, '${escapeJs(it.name)}', '${escapeJs(it.city)}')">Ajouter une review</button>
+          <button class="secondary small" onclick="viewReviews(${it.id})">Voir reviews</button>
+          <button class="danger small" onclick="delEst(${it.id})">Delete</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  window.openReview = (id, name, city) => {
+    selectedEstablishmentId = id;
+    selectedEstablishmentLabel = `${name} — ${city}`;
+    $("reviewTitle").textContent = "Ajouter une review";
+    $("reviewMeta").textContent = selectedEstablishmentLabel;
+    $("reviewCard").style.display = "block";
+    window.scrollTo({ top: document.body.scrollHeight, behavior:"smooth" });
+  };
+
+  $("cancelReviewBtn").addEventListener("click", () => {
+    $("reviewCard").style.display = "none";
+  });
+
+  $("sendReviewBtn").addEventListener("click", async () => {
+    if (!selectedEstablishmentId) return;
+
+    const rating = parseInt($("rating").value, 10);
+    const comment = $("comment").value.trim();
+    const tagsRaw = $("tags").value.trim();
+    const tags = tagsRaw ? tagsRaw.split(",").map(s=>s.trim()).filter(Boolean) : [];
+
+    if (!comment){
+      toast($("toast2"), "Écris un commentaire.", true);
+      return;
+    }
+
+    try{
+      await api(`/establishments/${selectedEstablishmentId}/reviews`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ rating, comment, tags })
+      });
+      toast($("toast2"), "Review publiée ✅");
+      $("comment").value = "";
+      $("tags").value = "";
+      await loadList();
+    }catch(e){
+      toast($("toast2"), "Erreur review (check terminal).", true);
+    }
+  });
+
+  window.viewReviews = async (id) => {
+    // Ici on reste simple: ouvre le Swagger pour l’instant si tu veux
+    window.open(`/docs`, "_blank");
+  };
+
+  window.delEst = async (id) => {
+    try{
+      await api(`/establishments/${id}`, { method:"DELETE" });
+      await loadList();
+    }catch(e){}
+  };
+
+  function escapeHtml(s){
+    return String(s || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  }
+  function escapeJs(s){
+    return String(s || "").replaceAll("\\","\\\\").replaceAll("'","\\'");
+  }
+
+  // auto-load
+  loadList();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
