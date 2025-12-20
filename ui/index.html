@@ -4,55 +4,26 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>THENA</title>
-  <style>
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;background:#0b1020;color:#eaf0ff}
-    .wrap{max-width:900px;margin:0 auto;padding:48px 18px}
-    h1{letter-spacing:.08em;margin:0 0 8px 0}
-    .sub{opacity:.8;margin-bottom:22px}
-    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px}
-    .search{position:relative}
-    input{width:100%;font-size:18px;padding:14px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:#fff;outline:none}
-    input:focus{border-color:rgba(150,200,255,.7)}
-    #results{display:none;position:absolute;left:0;right:0;top:54px;background:#0f1730;border:1px solid rgba(255,255,255,.12);border-radius:12px;overflow:hidden;z-index:20}
-    .result-item{padding:12px 12px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
-    .result-item:hover{background:rgba(255,255,255,.06)}
-    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-    button{padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.10);color:#fff;cursor:pointer}
-    button:disabled{opacity:.45;cursor:not-allowed}
-    #selected{display:none;margin-top:16px}
-    .title{font-weight:700;margin-bottom:6px}
-    .muted{opacity:.85}
-    #status{margin-top:12px;font-size:14px;opacity:.9}
-    #status[data-type="ok"]{color:#9ff3c3}
-    #status[data-type="err"]{color:#ff9b9b}
-  </style>
+  <link rel="stylesheet" href="/ui/styles.css" />
 </head>
 <body>
   <div class="wrap">
-    <h1>THENA</h1>
-    <div class="sub">Trouve un établissement (Google) puis ajoute-le à ta base.</div>
+    <header class="hero">
+      <div class="brand">THENA</div>
+      <div class="subtitle">Tape un nom → clique → fiche THENA.</div>
+    </header>
 
-    <div class="card">
-      <div class="search">
-        <input id="search" placeholder="Ex: Restaurant à Chamonix…" autocomplete="off" />
-        <div id="results"></div>
-      </div>
+    <section class="card">
+      <label class="label">Recherche un établissement</label>
+      <input id="search" class="input" placeholder="ex: brasserie chamonix" autocomplete="off" />
+      <div id="hint" class="hint"></div>
+      <div id="suggestions" class="suggestions"></div>
+    </section>
 
-      <div id="selected" class="card" style="margin-top:14px;">
-        <div class="title" id="selected-name"></div>
-        <div class="muted" id="selected-address"></div>
-        <div class="muted" id="selected-meta" style="margin-top:6px;"></div>
-
-        <div class="row">
-          <button id="btn-details" disabled>Voir détails</button>
-          <button id="btn-add" disabled>Ajouter à THENA</button>
-        </div>
-      </div>
-
-      <div id="status"></div>
-    </div>
+    <section id="panel" class="card hidden"></section>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="/ui/app.js"></script>
 </body>
 </html>
+

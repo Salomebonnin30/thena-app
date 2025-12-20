@@ -1,0 +1,186 @@
+:root{
+  --bg:#07101f;
+  --card:#0f203a;
+  --card2:#0c1a30;
+  --text:#e9eef7;
+  --muted:#a9b7d0;
+  --line:rgba(255,255,255,.08);
+
+  --green:#24d18f;
+  --orange:#ffb020;
+  --red:#ff4d4d;
+  --blue:#6aa7ff;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: radial-gradient(1200px 600px at 20% 0%, #123a7a 0%, var(--bg) 55%);
+  color:var(--text);
+}
+
+.wrap{max-width:980px;margin:0 auto;padding:28px 18px 80px}
+.hero{margin-bottom:16px}
+.brand{font-size:40px;font-weight:800;letter-spacing:.5px}
+.subtitle{color:var(--muted);margin-top:6px}
+
+.card{
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+  margin-top:14px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+}
+
+.hidden{display:none}
+.label{display:block;font-weight:700;margin-bottom:8px}
+.input{
+  width:100%;
+  padding:14px 14px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background: rgba(0,0,0,.25);
+  color:var(--text);
+  outline:none;
+  font-size:16px;
+}
+.hint{margin-top:8px;color:var(--muted);font-size:13px}
+
+.suggestions{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.sug{
+  padding:10px 12px;border-radius:12px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.18);
+  cursor:pointer;
+}
+.sug:hover{background:rgba(255,255,255,.06)}
+
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.2);
+  color:var(--text);
+  font-size:13px;
+}
+.badge.blue{border-color:rgba(106,167,255,.35)}
+.badge.muted{color:var(--muted)}
+.badge.good{border-color:rgba(36,209,143,.4)}
+.badge.warn{border-color:rgba(255,176,32,.45)}
+.badge.bad{border-color:rgba(255,77,77,.45)}
+
+.panelTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.title{font-size:22px;font-weight:800;margin:0}
+.addr{color:var(--muted);margin-top:4px}
+.sep{height:1px;background:var(--line);margin:14px 0}
+
+.kpi{
+  min-width:170px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.16);
+  text-align:center;
+}
+.kpi .k{color:var(--muted);font-size:12px;font-weight:700}
+.kpi .v{font-size:26px;font-weight:900;margin-top:4px}
+.kpi.good .v{color:var(--green)}
+.kpi.warn .v{color:var(--orange)}
+.kpi.bad .v{color:var(--red)}
+
+.btnRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+button{
+  border:none;
+  border-radius:12px;
+  padding:12px 14px;
+  cursor:pointer;
+  font-weight:800;
+}
+.btnPrimary{background:var(--green);color:#05131a}
+.btnGhost{background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--line)}
+.btnDanger{background:rgba(255,77,77,.18);color:var(--text);border:1px solid rgba(255,77,77,.35)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+
+textarea#comment {
+  width: 100%;
+  min-height: 160px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+textarea#comment::placeholder {
+  color: rgba(255,255,255,.55);
+}
+
+
+
+.small{font-size:12px;color:var(--muted)}
+.review{
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.18);
+  border-radius:14px;
+  padding:12px;
+  margin-top:10px;
+}
+.reviewHead{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.scorePill{
+  padding:6px 10px;border-radius:999px;
+  border:1px solid var(--line);
+  font-weight:900;
+}
+.scorePill.good{border-color:rgba(36,209,143,.45);color:var(--green)}
+.scorePill.warn{border-color:rgba(255,176,32,.55);color:var(--orange)}
+.scorePill.bad{border-color:rgba(255,77,77,.55);color:var(--red)}
+.scorePill.na{border-color:rgba(255,255,255,.15);color:var(--muted)}
+
+.err{color:var(--red);font-weight:800;margin-top:10px}
+.ok{color:var(--green);font-weight:800;margin-top:10px}
+
+/* ==============================
+   THENA SCORE BADGES
+   ============================== */
+
+.badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .3px;
+  border: 1px solid rgba(255,255,255,.15);
+}
+
+.badge-na {
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.75);
+}
+
+.badge-good {
+  background: rgba(60, 220, 140, .22);
+  color: #6bffb2;
+  border-color: rgba(60, 220, 140, .45);
+}
+
+.badge-mid {
+  background: rgba(255, 185, 70, .22);
+  color: #ffd27a;
+  border-color: rgba(255, 185, 70, .45);
+}
+
+.badge-bad {
+  background: rgba(255, 90, 110, .22);
+  color: #ff9aa6;
+  border-color: rgba(255, 90, 110, .45);
+}
