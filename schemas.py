@@ -40,13 +40,9 @@ class ReviewCreate(BaseModel):
     role: Optional[str] = None
     contract: Optional[str] = None
 
-    # NEW: logement
-    # values attendues côté UI (ex): "non_loge" / "loge_employeur"
-    housing: Optional[str] = None
-    # values attendues côté UI (ex): "bon" / "moyen" / "mauvais"
-    housing_quality: Optional[str] = None
+    housing: Optional[str] = None           # "logé" / "non_logé" / "N/A"
+    housing_quality: Optional[str] = None   # "top" / "ok" / "horrible" / ...
 
-    # Tags (booleans)
     coupure: bool = False
     unpaid_overtime: bool = False
     toxic_manager: bool = False
@@ -57,14 +53,12 @@ class ReviewCreate(BaseModel):
 class ReviewOut(BaseModel):
     id: int
     establishment_id: int
-
     score: Optional[int] = None
     comment: str
 
     role: Optional[str] = None
     contract: Optional[str] = None
 
-    # NEW: logement
     housing: Optional[str] = None
     housing_quality: Optional[str] = None
 

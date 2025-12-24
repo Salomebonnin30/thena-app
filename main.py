@@ -177,21 +177,22 @@ def create_review(payload: ReviewCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Establishment not found")
 
     review = Review(
-        establishment_id=payload.establishment_id,
-        score=payload.score,
-        comment=payload.comment.strip(),
-        role=(payload.role.strip() if payload.role else None),
-        contract=payload.contract,
+    establishment_id=payload.establishment_id,
+    score=payload.score,
+    comment=payload.comment,
+    role=payload.role,
+    contract=payload.contract,
 
-        housing=data.housing,
-        housing_quality=data.housing_quality,
+    housing=payload.housing,
+    housing_quality=payload.housing_quality,
 
-        coupure=payload.coupure,
-        unpaid_overtime=payload.unpaid_overtime,
-        toxic_manager=payload.toxic_manager,
-        harassment=payload.harassment,
-        recommend=payload.recommend,
-    )
+    coupure=payload.coupure,
+    unpaid_overtime=payload.unpaid_overtime,
+    toxic_manager=payload.toxic_manager,
+    harassment=payload.harassment,
+    recommend=payload.recommend,
+)
+
     db.add(review)
     db.commit()
     db.refresh(review)

@@ -1,9 +1,9 @@
 /* ui/app.js
    THENA — Front ultra clean (no framework)
-   - Autocomplete Google -> click -> charge fiche THENA
+   - Autocomplete Google -> click -> fiche THENA
    - Si pas en DB -> propose "Ajouter à THENA + 1ère review"
    - Si déjà en DB -> affiche reviews + formulaire "Ajouter une review"
-   - Draft persisté en localStorage (tu peux fermer, reprendre un autre jour)
+   - Draft persisté en localStorage
 */
 
 "use strict";
@@ -11,6 +11,8 @@
 /* =========================
    DOM
 ========================= */
+console.log("THENA app.js loaded - HOUSING v1");
+
 const $ = (sel) => document.querySelector(sel);
 
 const search = $("#search");
@@ -31,8 +33,8 @@ const LS = {
 
 let debounceTimer = null;
 let current = {
-  place: null, // Google place details
-  establishment: null, // THENA est + reviews
+  place: null,         // Google place details (normalized)
+  establishment: null, // THENA bundle {establishment, reviews}
 };
 
 /* =========================
@@ -57,21 +59,6 @@ function formatDate(isoOrDate) {
   }
 }
 
-function scoreMeta(avg) {
-  // avg is 0..10 or null
-  if (avg == null) return { label: "N/A", cls: "kpi" };
-  if (avg >= 7) return { label: avg.toFixed(1), cls: "kpi kpi_good" };
-  if (avg >= 4) return { label: avg.toFixed(1), cls: "kpi kpi_warn" };
-  return { label: avg.toFixed(1), cls: "kpi kpi_bad" };
-}
-
-function scorePillClass(score) {
-  if (score == null) return "scorePill na";
-  if (score >= 7) return "scorePill good";
-  if (score >= 4) return "scorePill warn";
-  return "scorePill bad";
-}
-
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -86,8 +73,37 @@ function computeAverageScore(reviews) {
   return sum / vals.length;
 }
 
+function scoreMeta(avg) {
+  if (avg == null) return { label: "N/A", cls: "kpi" };
+  if (avg >= 7) return { label: avg.toFixed(1), cls: "kpi kpi_good" };
+  if (avg >= 4) return { label: avg.toFixed(1), cls: "kpi kpi_warn" };
+  return { label: avg.toFixed(1), cls: "kpi kpi_bad" };
+}
+
+function scorePillClass(score) {
+  if (score == null) return "scorePill na";
+  if (score >= 7) return "scorePill good";
+  if (score >= 4) return "scorePill warn";
+  return "scorePill bad";
+}
+
+function safeJson(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+function clearSuggestions() {
+  suggestions.innerHTML = "";
+}
+
+function setHint(text) {
+  hint.textContent = text || "";
+}
+
 function normalizePlace(p) {
-  // make sure we can read rating no matter the key name
   const rating =
     p?.rating ?? p?.google_rating ?? p?.googleRating ?? p?.google?.rating ?? null;
 
@@ -107,24 +123,8 @@ function normalizePlace(p) {
   };
 }
 
-function safeJson(str, fallback) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return fallback;
-  }
-}
-
-function clearSuggestions() {
-  suggestions.innerHTML = "";
-}
-
-function setHint(text) {
-  hint.textContent = text || "";
-}
-
 /* =========================
-   API (with smart fallback)
+   API
 ========================= */
 async function apiFetch(path, opts = {}) {
   const res = await fetch(API + path, {
@@ -132,7 +132,6 @@ async function apiFetch(path, opts = {}) {
     ...opts,
   });
 
-  // read text first to keep error payload if any
   const text = await res.text();
   let data = null;
   try {
@@ -165,7 +164,6 @@ async function tryManyGet(paths) {
       return await apiGET(p);
     } catch (e) {
       lastErr = e;
-      // keep trying on 404/422 mainly
       if (![404, 422].includes(e.status)) break;
     }
   }
@@ -205,7 +203,7 @@ function clearDraft() {
 }
 
 /* =========================
-   Rendering
+   Rendering helpers
 ========================= */
 function showPanel() {
   panel.classList.remove("hidden");
@@ -227,35 +225,91 @@ function renderSuggestions(items) {
     const div = document.createElement("div");
     div.className = "sug";
     div.textContent = desc;
-    div.onclick = () => onSelectSuggestion(placeId, desc);
+    div.onclick = () => onSelectSuggestion(placeId);
     frag.appendChild(div);
   }
   suggestions.appendChild(frag);
 }
 
+function renderFlag(label, key, checked) {
+  return `
+    <label class="badge" style="cursor:pointer; user-select:none;">
+      <input type="checkbox" data-flag="${escapeHtml(key)}" ${checked ? "checked" : ""} />
+      ${escapeHtml(label)}
+    </label>
+  `;
+}
+
+function collectFlags() {
+  const flags = {};
+  panel.querySelectorAll("input[data-flag]").forEach((cb) => {
+    flags[cb.dataset.flag] = cb.checked;
+  });
+  return flags;
+}
+
+function setFormMsg(text, kind = "ok") {
+  const el = $("#formMsg");
+  if (!el) return;
+  el.className = kind === "err" ? "err" : "ok";
+  el.textContent = text;
+}
+
+/* =========================
+   HOUSING constants
+========================= */
+const HOUSING_OPTIONS = [
+  { v: "", label: "—" },
+  { v: "NON_LOGE", label: "Non logé" },
+  { v: "LOGE", label: "Logé (fourni par l’employeur)" },
+];
+
+const HOUSING_QUALITY_OPTIONS = [
+  { v: "", label: "—" },
+  { v: "TOP", label: "Top" },
+  { v: "OK", label: "OK" },
+  { v: "MOYEN", label: "Moyen" },
+  { v: "MAUVAIS", label: "Mauvais" },
+  { v: "INSALUBRE", label: "Insalubre" },
+];
+
+// affiche joli même si backend envoie une autre string
+function housingLabel(v) {
+  const map = {
+    NON_LOGE: "Non logé",
+    LOGE: "Logé",
+    Top: "Top",
+    OK: "OK",
+    Moyen: "Moyen",
+    Mauvais: "Mauvais",
+    Insalubre: "Insalubre",
+  };
+  return map[v] || v || null;
+}
+
+/* =========================
+   Render Panel
+========================= */
 function renderPanel(estBundle, isNewFlow) {
-  // estBundle: { establishment, reviews } OR null
-  // current.place always exists here
   showPanel();
 
-  const place = current.place; // normalized
+  const place = current.place;
   const est = estBundle?.establishment ?? null;
   const reviews = estBundle?.reviews ?? [];
+
   const avg = computeAverageScore(reviews);
   const avgMeta = scoreMeta(avg);
 
   const googleRating = place.rating;
   const googleText = googleRating != null ? googleRating.toFixed(1) : "N/A";
 
-  const types = place.types || [];
-  const typesHtml = types
+  const typesHtml = (place.types || [])
     .slice(0, 8)
     .map((t) => `<span class="badge badge-na">${escapeHtml(t)}</span>`)
     .join("");
 
   const reviewsCount = reviews.length;
 
-  // Header / KPIs
   const topHtml = `
     <div class="panelTop">
       <div>
@@ -276,7 +330,6 @@ function renderPanel(estBundle, isNewFlow) {
     <div class="sep"></div>
   `;
 
-  // Reviews list
   const listHtml =
     reviewsCount === 0
       ? `<div class="small">Aucun avis THENA pour le moment.</div>`
@@ -286,14 +339,18 @@ function renderPanel(estBundle, isNewFlow) {
             const pillText = score == null ? "Sans note" : `${score}/10`;
             const pillCls = scorePillClass(score);
 
-            const tags = (r.tags || r.flags || [])
-              .map((x) => `<span class="badge badge-na">${escapeHtml(x)}</span>`)
-              .join(" ");
-
             const metaBits = [
               r.role ? `Rôle: ${escapeHtml(r.role)}` : null,
               r.contract ? `Contrat: ${escapeHtml(r.contract)}` : null,
+              r.housing ? `Logement: ${escapeHtml(housingLabel(r.housing))}` : null,
+              r.housing_quality
+                ? `Qualité: ${escapeHtml(housingLabel(r.housing_quality))}`
+                : null,
             ].filter(Boolean);
+
+            const tags = (r.tags || r.flags || [])
+              .map((x) => `<span class="badge badge-na">${escapeHtml(x)}</span>`)
+              .join(" ");
 
             return `
               <div class="review">
@@ -304,18 +361,24 @@ function renderPanel(estBundle, isNewFlow) {
                   </div>
                   <div class="small">${escapeHtml(formatDate(r.created_at || r.createdAt || r.date))}</div>
                 </div>
+
                 <div style="margin-top:8px">${escapeHtml(r.comment || "")}</div>
+
                 ${tags ? `<div class="row" style="margin-top:10px">${tags}</div>` : ""}
-                ${r.id ? `<div class="btnRow">
-                  <button class="btnDanger" onclick="deleteReview('${r.id}')">Supprimer</button>
-                  <span class="small">Visible uniquement sur l'appareil qui a posté l’avis.</span>
-                </div>` : ""}
+
+                ${
+                  r.id
+                    ? `<div class="btnRow">
+                        <button class="btnDanger" onclick="deleteReview('${r.id}')">Supprimer</button>
+                        <span class="small">Visible uniquement sur l'appareil qui a posté l’avis.</span>
+                      </div>`
+                    : ""
+                }
               </div>
             `;
           })
           .join("");
 
-  // Form (new flow requires first comment)
   const draft = loadDraft();
 
   const defaultScore = draft.score ?? "";
@@ -323,10 +386,20 @@ function renderPanel(estBundle, isNewFlow) {
   const defaultContract = draft.contract ?? "";
   const defaultComment = draft.comment ?? "";
   const defaultFlags = draft.flags ?? {};
+  const defaultHousing = draft.housing ?? "";
+  const defaultHousingQuality = draft.housing_quality ?? "";
 
   const formTitle = isNewFlow ? "Ajouter à THENA + 1ère review" : "Ajouter une review";
-  const scoreLabel = isNewFlow ? "Note (0-10) (optionnelle)" : "Note (0-10) (optionnelle)";
   const btnText = isNewFlow ? "Ajouter + 1ère review" : "Ajouter la review";
+
+  const housingOptionsHtml = HOUSING_OPTIONS.map(
+    (o) => `<option value="${escapeHtml(o.v)}" ${o.v === defaultHousing ? "selected" : ""}>${escapeHtml(o.label)}</option>`
+  ).join("");
+
+  const housingQualityOptionsHtml = HOUSING_QUALITY_OPTIONS.map(
+    (o) =>
+      `<option value="${escapeHtml(o.v)}" ${o.v === defaultHousingQuality ? "selected" : ""}>${escapeHtml(o.label)}</option>`
+  ).join("");
 
   panel.innerHTML = `
     <section class="card">
@@ -344,7 +417,7 @@ function renderPanel(estBundle, isNewFlow) {
 
         <div class="grid2">
           <div>
-            <label>${escapeHtml(scoreLabel)}</label>
+            <label>Note (0-10) (optionnelle)</label>
             <input id="score" class="input" inputmode="numeric" placeholder="ex: 7" value="${escapeHtml(defaultScore)}" />
             <div class="small">Si vide, l'avis est publié “Sans note”.</div>
           </div>
@@ -366,6 +439,21 @@ function renderPanel(estBundle, isNewFlow) {
               <option value="Alternance" ${defaultContract === "Alternance" ? "selected" : ""}>Alternance</option>
               <option value="Freelance" ${defaultContract === "Freelance" ? "selected" : ""}>Freelance</option>
             </select>
+          </div>
+
+          <div>
+            <label>Logement (optionnel)</label>
+            <select id="housing" class="input">
+              ${housingOptionsHtml}
+            </select>
+          </div>
+
+          <div>
+            <label>Qualité du logement (optionnel)</label>
+            <select id="housing_quality" class="input">
+              ${housingQualityOptionsHtml}
+            </select>
+            <div class="small">Remplis surtout si tu es logé(e) par l’employeur.</div>
           </div>
         </div>
 
@@ -399,6 +487,8 @@ function renderPanel(estBundle, isNewFlow) {
   const scoreEl = $("#score");
   const roleEl = $("#role");
   const contractEl = $("#contract");
+  const housingEl = $("#housing");
+  const housingQualityEl = $("#housing_quality");
   const commentEl = $("#comment");
   const submitBtn = $("#submitReview");
   const refreshBtn = $("#refreshBtn");
@@ -408,6 +498,8 @@ function renderPanel(estBundle, isNewFlow) {
       score: scoreEl.value,
       role: roleEl.value,
       contract: contractEl.value,
+      housing: housingEl.value,
+      housing_quality: housingQualityEl.value,
       comment: commentEl.value,
       flags: collectFlags(),
     });
@@ -417,65 +509,35 @@ function renderPanel(estBundle, isNewFlow) {
     scoreEl.addEventListener(ev, saveAll);
     roleEl.addEventListener(ev, saveAll);
     contractEl.addEventListener(ev, saveAll);
+    housingEl.addEventListener(ev, saveAll);
+    housingQualityEl.addEventListener(ev, saveAll);
     commentEl.addEventListener(ev, saveAll);
   });
 
-  // flags
   panel.querySelectorAll("input[data-flag]").forEach((cb) => {
     cb.addEventListener("change", saveAll);
   });
 
-  submitBtn.onclick = async () => {
-    await submitReviewFlow({ isNewFlow });
-  };
-
-  refreshBtn.onclick = async () => {
-    await refreshCurrent();
-  };
-}
-
-function renderFlag(label, key, checked) {
-  return `
-    <label class="badge" style="cursor:pointer; user-select:none;">
-      <input type="checkbox" data-flag="${escapeHtml(key)}" ${checked ? "checked" : ""} />
-      ${escapeHtml(label)}
-    </label>
-  `;
-}
-
-function collectFlags() {
-  const flags = {};
-  panel.querySelectorAll("input[data-flag]").forEach((cb) => {
-    flags[cb.dataset.flag] = cb.checked;
-  });
-  return flags;
-}
-
-function setFormMsg(html, kind = "ok") {
-  const el = $("#formMsg");
-  if (!el) return;
-  el.className = kind === "err" ? "err" : "ok";
-  el.textContent = html;
+  submitBtn.onclick = async () => submitReviewFlow({ isNewFlow });
+  refreshBtn.onclick = async () => refreshCurrent();
 }
 
 /* =========================
    Core flows
 ========================= */
-async function onSelectSuggestion(placeId, description) {
+async function onSelectSuggestion(placeId) {
   try {
     setHint("Chargement...");
     clearSuggestions();
     localStorage.setItem(LS.currentPlaceId, placeId);
 
-    // 1) Google details
     const placeRaw = await apiGET(`/api/google/place?place_id=${encodeURIComponent(placeId)}`);
     current.place = normalizePlace(placeRaw);
 
-    // 2) Then-a lookup in DB (try a few endpoints to avoid your 422 mess)
     const gid = current.place.google_place_id;
     const estBundle = await lookupEstablishmentByGoogleId(gid);
 
-    current.establishment = estBundle; // may be null
+    current.establishment = estBundle;
     localStorage.setItem(LS.lastQuery, search.value);
 
     if (!estBundle) {
@@ -497,10 +559,6 @@ async function onSelectSuggestion(placeId, description) {
 async function lookupEstablishmentByGoogleId(googlePlaceId) {
   if (!googlePlaceId) return null;
 
-  // try endpoints you used (seen in your terminal)
-  // - /establishments/lookup?google_place_id=...
-  // - /establishments/by_google?google_place_id=...
-  // - /establishments/find?google_place_id=...
   try {
     const data = await tryManyGet([
       `/establishments/lookup?google_place_id=${encodeURIComponent(googlePlaceId)}`,
@@ -508,11 +566,9 @@ async function lookupEstablishmentByGoogleId(googlePlaceId) {
       `/establishments/find?google_place_id=${encodeURIComponent(googlePlaceId)}`,
     ]);
 
-    // normalize expected shape:
-    // either {establishment, reviews} or establishment only
     if (data?.establishment && Array.isArray(data?.reviews)) return data;
+
     if (data?.id) {
-      // if API returns just establishment, fetch full by id if available
       try {
         const full = await apiGET(`/establishments/${data.id}`);
         return full?.establishment ? full : { establishment: data, reviews: [] };
@@ -520,10 +576,10 @@ async function lookupEstablishmentByGoogleId(googlePlaceId) {
         return { establishment: data, reviews: [] };
       }
     }
+
     return null;
   } catch (e) {
-    if (e.status === 404) return null;
-    if (e.status === 422) return null;
+    if ([404, 422].includes(e.status)) return null;
     throw e;
   }
 }
@@ -537,7 +593,6 @@ async function refreshCurrent() {
     return;
   }
 
-  // if not in DB, re-run lookup on place id
   const gid = current?.place?.google_place_id;
   const estBundle = await lookupEstablishmentByGoogleId(gid);
   current.establishment = estBundle;
@@ -548,6 +603,8 @@ async function submitReviewFlow({ isNewFlow }) {
   const scoreEl = $("#score");
   const roleEl = $("#role");
   const contractEl = $("#contract");
+  const housingEl = $("#housing");
+  const housingQualityEl = $("#housing_quality");
   const commentEl = $("#comment");
 
   const scoreVal = scoreEl?.value?.trim();
@@ -568,6 +625,10 @@ async function submitReviewFlow({ isNewFlow }) {
     .filter(([, v]) => v)
     .map(([k]) => k);
 
+  // housing logic (optional)
+  const housing = housingEl?.value || null;
+  const housing_quality = housingQualityEl?.value || null;
+
   try {
     setFormMsg("Enregistrement...", "ok");
 
@@ -575,24 +636,17 @@ async function submitReviewFlow({ isNewFlow }) {
     let estBundle = current.establishment;
 
     if (!estBundle) {
-      // create establishment first
       const place = current.place;
       const payload = {
         google_place_id: place.google_place_id,
         name: place.name,
         address: place.address,
-        rating: place.rating, // optional
+        rating: place.rating,
         types_json: JSON.stringify(place.types || []),
       };
 
       const created = await apiPOST("/establishments", payload);
-
-      // created could be establishment only or bundle
-      if (created?.establishment) {
-        estBundle = created;
-      } else {
-        estBundle = { establishment: created, reviews: [] };
-      }
+      estBundle = created?.establishment ? created : { establishment: created, reviews: [] };
       current.establishment = estBundle;
       localStorage.setItem(LS.currentEstId, estBundle.establishment.id);
     }
@@ -602,33 +656,35 @@ async function submitReviewFlow({ isNewFlow }) {
 
     const reviewPayload = {
       establishment_id: estId,
-      score: score,
-      comment: comment,
+      score,
+      comment,
       role: roleEl?.value?.trim() || null,
       contract: contractEl?.value || null,
-      tags: tags,
+      housing: housing,
+      housing_quality: housing_quality,
+      tags,
     };
 
     // Try endpoints: /reviews OR /establishments/{id}/reviews
-    let createdReview = null;
     try {
-      createdReview = await apiPOST("/reviews", reviewPayload);
+      await apiPOST("/reviews", reviewPayload);
     } catch (e) {
       if ([404, 422].includes(e.status)) {
-        createdReview = await apiPOST(`/establishments/${estId}/reviews`, reviewPayload);
+        await apiPOST(`/establishments/${estId}/reviews`, reviewPayload);
       } else {
         throw e;
       }
     }
 
-    // refresh full bundle
     const fresh = await apiGET(`/establishments/${estId}`);
     current.establishment = fresh?.establishment ? fresh : current.establishment;
 
-    // reset form (keep score empty etc)
+    // reset form
     scoreEl.value = "";
     roleEl.value = "";
     contractEl.value = "";
+    housingEl.value = "";
+    housingQualityEl.value = "";
     commentEl.value = "";
     panel.querySelectorAll("input[data-flag]").forEach((cb) => (cb.checked = false));
 
@@ -644,7 +700,7 @@ async function submitReviewFlow({ isNewFlow }) {
 }
 
 /* =========================
-   Delete review (global for onclick)
+   Delete review (global)
 ========================= */
 window.deleteReview = async (id) => {
   if (!id) return;
@@ -653,7 +709,6 @@ window.deleteReview = async (id) => {
   try {
     await apiDELETE(`/reviews/${encodeURIComponent(id)}`);
 
-    // refresh
     if (current?.establishment?.establishment?.id) {
       const estId = current.establishment.establishment.id;
       const fresh = await apiGET(`/establishments/${estId}`);
@@ -683,7 +738,6 @@ search.addEventListener("input", () => {
     try {
       setHint("Chargement...");
       const items = await apiGET(`/api/google/autocomplete?q=${encodeURIComponent(q)}`);
-      // items expected array
       if (!items || items.length === 0) {
         setHint("Aucun résultat.");
         return;
@@ -698,14 +752,9 @@ search.addEventListener("input", () => {
 });
 
 /* =========================
-   Boot restore (resume another day)
+   Boot restore
 ========================= */
 (function boot() {
-  // restore last query
   const q = localStorage.getItem(LS.lastQuery);
   if (q) search.value = q;
-
-  // optional: if you want auto-reload last place, uncomment:
-  // const pid = localStorage.getItem(LS.currentPlaceId);
-  // if (pid) onSelectSuggestion(pid, "");
 })();
