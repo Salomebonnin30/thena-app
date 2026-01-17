@@ -13,6 +13,8 @@
 }
 
 *{box-sizing:border-box}
+html,body{height:100%}
+
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -21,10 +23,40 @@ body{
 }
 
 .wrap{max-width:980px;margin:0 auto;padding:28px 18px 80px}
-.hero{margin-bottom:16px}
-.brand{font-size:40px;font-weight:800;letter-spacing:.5px}
-.subtitle{color:var(--muted);margin-top:6px}
+.hidden{display:none}
 
+/* =========================
+   Hero / Header
+========================= */
+.hero{margin-bottom:16px}
+.brand{font-size:40px;font-weight:900;letter-spacing:.5px;line-height:1}
+.subtitle{color:var(--muted);margin-top:8px}
+
+.heroTop{display:flex;align-items:center;justify-content:space-between;gap:16px}
+@media(max-width:760px){
+  .brand{font-size:34px}
+  .heroTop{flex-direction:column;align-items:flex-start}
+}
+
+/* Auth box */
+.authBox{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:8px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(0,0,0,.18);
+}
+.authBtns{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:760px){
+  .authBox{align-items:flex-start;width:100%}
+}
+
+/* =========================
+   Cards
+========================= */
 .card{
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
   border:1px solid var(--line);
@@ -34,9 +66,10 @@ body{
   box-shadow: 0 14px 40px rgba(0,0,0,.35);
 }
 
-.hidden{display:none}
-.label{display:block;font-weight:700;margin-bottom:8px}
-.input{
+.label{display:block;font-weight:800;margin-bottom:8px}
+
+.input,
+select.input{
   width:100%;
   padding:14px 14px;
   border-radius:12px;
@@ -46,36 +79,76 @@ body{
   outline:none;
   font-size:16px;
 }
+
+.input:focus,
+textarea:focus,
+select.input:focus{
+  border-color: rgba(106,167,255,.55);
+  box-shadow: 0 0 0 4px rgba(106,167,255,.10);
+}
+
 .hint{margin-top:8px;color:var(--muted);font-size:13px}
 
+.small{font-size:12px;color:var(--muted)}
+.small.muted{color:var(--muted)}
+
+/* Divider */
+.sep{height:1px;background:var(--line);margin:14px 0}
+
+/* =========================
+   Suggestions
+========================= */
 .suggestions{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .sug{
-  padding:10px 12px;border-radius:12px;
+  padding:10px 12px;
+  border-radius:12px;
   border:1px solid var(--line);
   background:rgba(0,0,0,.18);
   cursor:pointer;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease;
 }
-.sug:hover{background:rgba(255,255,255,.06)}
+.sug:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+.sug:active{transform:translateY(1px)}
 
-.row{display:flex;gap:10px;flex-wrap:wrap}
+/* =========================
+   Badges / Pills
+========================= */
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
 .badge{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:6px 10px;border-radius:999px;
-  border:1px solid var(--line);
-  background:rgba(0,0,0,.2);
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.18);
   color:var(--text);
   font-size:13px;
+  font-weight:700;
+  letter-spacing:.2px;
 }
+
+.badge-na{
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.78);
+  border-color: rgba(255,255,255,.12);
+}
+
+/* used by your HTML: .badge.blue / .badge.muted */
 .badge.blue{border-color:rgba(106,167,255,.35)}
 .badge.muted{color:var(--muted)}
-.badge.good{border-color:rgba(36,209,143,.4)}
-.badge.warn{border-color:rgba(255,176,32,.45)}
-.badge.bad{border-color:rgba(255,77,77,.45)}
 
+/* =========================
+   Panel Top + KPI
+========================= */
 .panelTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-.title{font-size:22px;font-weight:800;margin:0}
-.addr{color:var(--muted);margin-top:4px}
-.sep{height:1px;background:var(--line);margin:14px 0}
+.title{font-size:22px;font-weight:900;margin:0}
+.addr{color:var(--muted);margin-top:6px;line-height:1.35}
+
+@media(max-width:760px){
+  .panelTop{flex-direction:column}
+}
 
 .kpi{
   min-width:170px;
@@ -85,48 +158,17 @@ body{
   background:rgba(0,0,0,.16);
   text-align:center;
 }
-.kpi .k{color:var(--muted);font-size:12px;font-weight:700}
-.kpi .v{font-size:26px;font-weight:900;margin-top:4px}
-.kpi.good .v{color:var(--green)}
-.kpi.warn .v{color:var(--orange)}
-.kpi.bad .v{color:var(--red)}
+.kpi .k{color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.4px}
+.kpi .v{font-size:26px;font-weight:950;margin-top:4px}
 
-.btnRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-button{
-  border:none;
-  border-radius:12px;
-  padding:12px 14px;
-  cursor:pointer;
-  font-weight:800;
-}
-.btnPrimary{background:var(--green);color:#05131a}
-.btnGhost{background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--line)}
-.btnDanger{background:rgba(255,77,77,.18);color:var(--text);border:1px solid rgba(255,77,77,.35)}
+/* IMPORTANT: app.js uses kpi_good / kpi_warn / kpi_bad */
+.kpi_good .v{color:var(--green)}
+.kpi_warn .v{color:var(--orange)}
+.kpi_bad  .v{color:var(--red)}
 
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:760px){.grid2{grid-template-columns:1fr}}
-
-textarea#comment {
-  width: 100%;
-  min-height: 160px;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: rgba(0,0,0,.22);
-  color: var(--text);
-  outline: none;
-  resize: vertical;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-textarea#comment::placeholder {
-  color: rgba(255,255,255,.55);
-}
-
-
-
-.small{font-size:12px;color:var(--muted)}
+/* =========================
+   Reviews
+========================= */
 .review{
   border:1px solid var(--line);
   background:rgba(0,0,0,.18);
@@ -134,53 +176,151 @@ textarea#comment::placeholder {
   padding:12px;
   margin-top:10px;
 }
-.reviewHead{display:flex;justify-content:space-between;gap:10px;align-items:center}
+
+.reviewHead{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+@media(max-width:760px){
+  .reviewHead{flex-direction:column;align-items:flex-start}
+}
+
+/* score pill */
 .scorePill{
-  padding:6px 10px;border-radius:999px;
-  border:1px solid var(--line);
-  font-weight:900;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.16);
+  font-weight:950;
+  display:inline-flex;
+  align-items:center;
 }
 .scorePill.good{border-color:rgba(36,209,143,.45);color:var(--green)}
 .scorePill.warn{border-color:rgba(255,176,32,.55);color:var(--orange)}
 .scorePill.bad{border-color:rgba(255,77,77,.55);color:var(--red)}
 .scorePill.na{border-color:rgba(255,255,255,.15);color:var(--muted)}
 
-.err{color:var(--red);font-weight:800;margin-top:10px}
-.ok{color:var(--green);font-weight:800;margin-top:10px}
+/* =========================
+   Textarea
+========================= */
+textarea#comment{
+  width:100%;
+  min-height:180px;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.55;
+}
+textarea#comment::placeholder{color:rgba(255,255,255,.55)}
 
-/* ==============================
-   THENA SCORE BADGES
-   ============================== */
+/* =========================
+   Buttons
+========================= */
+.btnRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
 
-.badge {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: .3px;
-  border: 1px solid rgba(255,255,255,.15);
+button{
+  border:none;
+  border-radius:12px;
+  padding:12px 14px;
+  cursor:pointer;
+  font-weight:900;
+  letter-spacing:.2px;
+  transition: transform .06s ease, filter .12s ease, background .12s ease, border-color .12s ease;
+}
+button:active{transform:translateY(1px)}
+button:disabled{
+  cursor:not-allowed;
+  opacity:.55;
+  transform:none;
 }
 
-.badge-na {
-  background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.75);
+.btnPrimary{background:var(--green);color:#05131a}
+.btnPrimary:hover{filter:brightness(1.03)}
+
+.btnGhost{
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  border:1px solid var(--line);
+}
+.btnGhost:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.14)}
+
+.btnDanger{
+  background:rgba(255,77,77,.14);
+  color:var(--text);
+  border:1px solid rgba(255,77,77,.30);
+}
+.btnDanger:hover{background:rgba(255,77,77,.18);border-color:rgba(255,77,77,.38)}
+
+/* =========================
+   Grid helpers
+========================= */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+
+/* =========================
+   Messages
+========================= */
+.err{
+  color:var(--red);
+  font-weight:900;
+  margin-top:10px;
+}
+.ok{
+  color:var(--green);
+  font-weight:900;
+  margin-top:10px;
 }
 
-.badge-good {
-  background: rgba(60, 220, 140, .22);
-  color: #6bffb2;
-  border-color: rgba(60, 220, 140, .45);
+/* =========================
+   Modal
+========================= */
+.modal{position:fixed;inset:0;z-index:50}
+.modal.hidden{display:none}
+
+.modalOverlay{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  backdrop-filter: blur(3px);
 }
 
-.badge-mid {
-  background: rgba(255, 185, 70, .22);
-  color: #ffd27a;
-  border-color: rgba(255, 185, 70, .45);
+
+
+.modalCard{
+  position:relative;
+  max-width:520px;
+  margin:8vh auto;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+@media(max-width:760px){
+  .modalCard{margin:10vh 12px}
 }
 
-.badge-bad {
-  background: rgba(255, 90, 110, .22);
-  color: #ff9aa6;
-  border-color: rgba(255, 90, 110, .45);
+.modalHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
 }
+
+.modalTitle{
+  font-size:18px;
+  font-weight:950;
+}
+.btnPrimary{
+  min-width: 220px;
+}
+#loginMsg{
+  line-height: 1.4;
+}
+

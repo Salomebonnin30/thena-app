@@ -9,8 +9,20 @@
 <body>
   <div class="wrap">
     <header class="hero">
-      <div class="brand">THENA</div>
-      <div class="subtitle">Tape un nom → clique → fiche THENA.</div>
+      <div class="heroTop">
+        <div>
+          <div class="brand">THENA</div>
+          <div class="subtitle">Tape un nom → clique → fiche THENA.</div>
+        </div>
+
+        <div class="authBox">
+          <div id="authStatus" class="small muted">Non connecté</div>
+          <div class="authBtns">
+            <button id="btnLogin" class="btnGhost">Se connecter</button>
+            <button id="btnLogout" class="btnGhost hidden">Se déconnecter</button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <section class="card">
@@ -23,8 +35,47 @@
     <section id="panel" class="card hidden"></section>
   </div>
 
-  <script src="ui/app.js?v=7"></script>
+  <!-- MODAL LOGIN -->
+  <div id="loginModal" class="modal hidden" aria-hidden="true">
+    <div class="modalOverlay"></div>
 
+    <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <div class="modalHead">
+        <div>
+          <div id="loginTitle" class="modalTitle">Connexion THENA</div>
+          <div class="small muted">Email jamais affiché. Seul ton pseudo est public.</div>
+        </div>
+        <button id="btnCloseModal" class="btnGhost">✕</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <label class="label">Email</label>
+      <input id="loginEmail" class="input" type="email" placeholder="toi@email.com" />
+
+      <div style="height:10px"></div>
+
+      <label class="label">Pseudo (public)</label>
+      <input id="loginPseudo" class="input" placeholder="ex: Saison2026" maxlength="50" />
+
+      <div class="btnRow" style="margin-top:14px">
+        <button id="btnSendLink" class="btnPrimary">Envoyer le lien magique</button>
+        <span class="small muted">Valide 10 minutes.</span>
+      </div>
+
+      <div id="loginMsg" class="small" style="margin-top:10px"></div>
+
+      <!-- DEV: lien affiché si backend renvoie dev_link -->
+      <div id="devLinkBox" class="small hidden" style="margin-top:10px; word-break:break-all;">
+        <a id="devLinkA" target="_blank" rel="noreferrer">dev link</a>
+      </div>
+
+      <div class="small muted" style="margin-top:12px; line-height:1.4">
+         Si tu ne reçois rien : vérifie tes spams.
+      </div>
+    </div>
+  </div>
+
+  <script src="/ui/app.js?v=8"></script>
 </body>
 </html>
-
