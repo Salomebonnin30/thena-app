@@ -1,10 +1,13 @@
 import os
 import json
 import requests
+from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, engine, Base
@@ -14,20 +17,38 @@ from schemas import (
     EstablishmentOut,
     ReviewCreate,
     ReviewOut,
-    EstablishmentWithStats
+    EstablishmentWithStats,
 )
 
 # ---------------- ENV ----------------
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-if not GOOGLE_API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY missing in .env")
+# IMPORTANT: on ne crash PAS au démarrage si la clé manque.
+# Sinon Render = deploy failed direct.
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
+def require_google_key():
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY missing (set it in Render env vars)")
 
 # ---------------- APP ----------------
 app = FastAPI(title="THENA", version="1.0.0")
 
+# CORS (pratique si un jour tu sépares front/back)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# DB init
 Base.metadata.create_all(bind=engine)
+
+# ---------------- PATHS ----------------
+BASE_DIR = Path(__file__).resolve().parent
+UI_DIR = BASE_DIR / "ui"
 
 # ---------------- DB ----------------
 def get_db():
@@ -37,9 +58,16 @@ def get_db():
     finally:
         db.close()
 
+# ---------------- HEALTH ----------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 # ---------------- GOOGLE API ----------------
 @app.get("/api/google/autocomplete")
 def google_autocomplete(q: str = Query(min_length=1)):
+    require_google_key()
+
     url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
     params = {
         "input": q,
@@ -55,16 +83,15 @@ def google_autocomplete(q: str = Query(min_length=1)):
         raise HTTPException(status_code=400, detail=data)
 
     return [
-        {
-            "place_id": p["place_id"],
-            "description": p["description"],
-        }
+        {"place_id": p.get("place_id"), "description": p.get("description")}
         for p in data.get("predictions", [])
     ]
 
 
 @app.get("/api/google/place")
 def google_place(place_id: str):
+    require_google_key()
+
     url = "https://maps.googleapis.com/maps/api/place/details/json"
     params = {
         "place_id": place_id,
@@ -79,12 +106,12 @@ def google_place(place_id: str):
     if data.get("status") != "OK":
         raise HTTPException(status_code=400, detail=data)
 
-    result = data["result"]
+    result = data.get("result") or {}
 
     return {
-        "google_place_id": result["place_id"],
-        "name": result["name"],
-        "address": result["formatted_address"],
+        "google_place_id": result.get("place_id"),
+        "name": result.get("name"),
+        "address": result.get("formatted_address"),
         "google_rating": result.get("rating"),
         "types": result.get("types", []),
     }
@@ -127,7 +154,7 @@ def get_by_google(google_place_id: str, db: Session = Depends(get_db)):
 
 @app.get("/establishments/{establishment_id}", response_model=EstablishmentWithStats)
 def get_establishment(establishment_id: int, db: Session = Depends(get_db)):
-    est = db.query(Establishment).get(establishment_id)
+    est = db.query(Establishment).filter(Establishment.id == establishment_id).first()
     if not est:
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -135,7 +162,10 @@ def get_establishment(establishment_id: int, db: Session = Depends(get_db)):
 
 
 def build_establishment_stats(est_id: int, db: Session) -> EstablishmentWithStats:
-    est = db.query(Establishment).get(est_id)
+    est = db.query(Establishment).filter(Establishment.id == est_id).first()
+    if not est:
+        raise HTTPException(status_code=404, detail="Not found")
+
     reviews = (
         db.query(Review)
         .filter(Review.establishment_id == est_id)
@@ -146,7 +176,10 @@ def build_establishment_stats(est_id: int, db: Session) -> EstablishmentWithStat
     scores = [r.score for r in reviews if r.score is not None]
     avg = round(sum(scores) / len(scores), 1) if scores else None
 
-    types = json.loads(est.types_json) if est.types_json else []
+    try:
+        types = json.loads(est.types_json) if est.types_json else []
+    except Exception:
+        types = []
 
     return EstablishmentWithStats(
         establishment=EstablishmentOut(
@@ -167,7 +200,7 @@ def build_establishment_stats(est_id: int, db: Session) -> EstablishmentWithStat
 # ---------------- REVIEWS ----------------
 @app.post("/reviews", response_model=ReviewOut)
 def create_review(payload: ReviewCreate, db: Session = Depends(get_db)):
-    est = db.query(Establishment).get(payload.establishment_id)
+    est = db.query(Establishment).filter(Establishment.id == payload.establishment_id).first()
     if not est:
         raise HTTPException(status_code=404, detail="Establishment not found")
 
@@ -177,10 +210,8 @@ def create_review(payload: ReviewCreate, db: Session = Depends(get_db)):
         comment=payload.comment,
         role=payload.role,
         contract=payload.contract,
-
         housing=payload.housing,
         housing_quality=payload.housing_quality,
-
         coupure=payload.coupure,
         unpaid_overtime=payload.unpaid_overtime,
         toxic_manager=payload.toxic_manager,
@@ -196,7 +227,7 @@ def create_review(payload: ReviewCreate, db: Session = Depends(get_db)):
 
 @app.delete("/reviews/{review_id}")
 def delete_review(review_id: int, db: Session = Depends(get_db)):
-    r = db.query(Review).get(review_id)
+    r = db.query(Review).filter(Review.id == review_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Review not found")
 
@@ -205,8 +236,15 @@ def delete_review(review_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 # ---------------- UI ----------------
-app.mount("/ui", StaticFiles(directory="ui", html=True), name="ui")
+# IMPORTANT: chemins propres (pas "ui" relatif fragile)
+app.mount("/ui", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
 
 @app.get("/")
 def root():
-    return FileResponse("ui/index.html")
+    return FileResponse(str(UI_DIR / "index.html"))
+
+# ---------------- LOCAL RUN ----------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
