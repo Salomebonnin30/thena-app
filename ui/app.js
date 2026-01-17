@@ -4,6 +4,13 @@
    - Si pas en DB -> propose "Ajouter à THENA + 1ère review"
    - Si déjà en DB -> affiche reviews + formulaire "Ajouter une review"
    - Draft persisté en localStorage
+   Compatible avec ton backend main.py :
+   - GET  /api/google/autocomplete?q=
+   - GET  /api/google/place?place_id=
+   - POST /establishments   (retourne EstablishmentOut)
+   - GET  /establishments/by_google/{google_place_id} (retourne bundle EstablishmentWithStats)
+   - POST /reviews
+   - DELETE /reviews/{id}
 */
 
 "use strict";
@@ -11,8 +18,6 @@
 /* =========================
    DOM
 ========================= */
-console.log("THENA app.js loaded - HOUSING v1");
-
 const $ = (sel) => document.querySelector(sel);
 
 const search = $("#search");
@@ -27,18 +32,18 @@ const API = ""; // same origin
 const LS = {
   lastQuery: "thena:lastQuery",
   currentPlaceId: "thena:currentPlaceId",
-  currentEstId: "thena:currentEstId",
-  draft: (placeIdOrEstId) => `thena:draft:${placeIdOrEstId}`,
+  currentGooglePlaceId: "thena:currentGooglePlaceId",
+  draft: (key) => `thena:draft:${key}`,
 };
 
 let debounceTimer = null;
 let current = {
-  place: null,         // Google place details (normalized)
-  establishment: null, // THENA bundle {establishment, reviews}
+  place: null,          // normalized google place
+  bundle: null,         // EstablishmentWithStats {establishment, reviews, thena_avg, ...}
 };
 
 /* =========================
-   Small helpers
+   Helpers
 ========================= */
 function escapeHtml(s) {
   return String(s ?? "")
@@ -47,6 +52,31 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function safeJson(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+function setHint(text) {
+  hint.textContent = text || "";
+}
+
+function clearSuggestions() {
+  suggestions.innerHTML = "";
+}
+
+function showPanel() {
+  panel.classList.remove("hidden");
+}
+
+function hidePanel() {
+  panel.classList.add("hidden");
+  panel.innerHTML = "";
 }
 
 function formatDate(isoOrDate) {
@@ -69,8 +99,7 @@ function computeAverageScore(reviews) {
     .map((r) => safeNumber(r.score))
     .filter((n) => n != null);
   if (!vals.length) return null;
-  const sum = vals.reduce((a, b) => a + b, 0);
-  return sum / vals.length;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
 function scoreMeta(avg) {
@@ -87,37 +116,18 @@ function scorePillClass(score) {
   return "scorePill bad";
 }
 
-function safeJson(str, fallback) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return fallback;
-  }
-}
-
-function clearSuggestions() {
-  suggestions.innerHTML = "";
-}
-
-function setHint(text) {
-  hint.textContent = text || "";
-}
-
 function normalizePlace(p) {
+  // backend /api/google/place returns:
+  // { google_place_id, name, address, google_rating, types }
   const rating =
     p?.rating ?? p?.google_rating ?? p?.googleRating ?? p?.google?.rating ?? null;
 
-  const types =
-    p?.types ??
-    p?.place_types ??
-    p?.place?.types ??
-    (typeof p?.types_json === "string" ? safeJson(p.types_json, []) : []) ??
-    [];
+  const types = p?.types ?? (typeof p?.types_json === "string" ? safeJson(p.types_json, []) : []) ?? [];
 
   return {
-    google_place_id: p?.place_id ?? p?.google_place_id ?? p?.googlePlaceId ?? null,
+    google_place_id: p?.google_place_id ?? p?.place_id ?? p?.googlePlaceId ?? null,
     name: p?.name ?? "",
-    address: p?.formatted_address ?? p?.address ?? "",
+    address: p?.address ?? p?.formatted_address ?? "",
     rating: rating == null ? null : Number(rating),
     types: Array.isArray(types) ? types : [],
   };
@@ -142,7 +152,7 @@ async function apiFetch(path, opts = {}) {
 
   if (!res.ok) {
     const msg =
-      (data && data.detail) ||
+      (data && data.detail && typeof data.detail === "string" && data.detail) ||
       (typeof data === "string" ? data : null) ||
       `${res.status} ${res.statusText}`;
     const err = new Error(msg);
@@ -157,37 +167,19 @@ const apiGET = (p) => apiFetch(p);
 const apiPOST = (p, body) => apiFetch(p, { method: "POST", body: JSON.stringify(body) });
 const apiDELETE = (p) => apiFetch(p, { method: "DELETE" });
 
-async function tryManyGet(paths) {
-  let lastErr = null;
-  for (const p of paths) {
-    try {
-      return await apiGET(p);
-    } catch (e) {
-      lastErr = e;
-      if (![404, 422].includes(e.status)) break;
-    }
-  }
-  throw lastErr ?? new Error("GET failed");
-}
-
 /* =========================
-   Draft persistence
+   Draft
 ========================= */
 function draftKey() {
-  const k = current?.establishment?.establishment?.id
-    ? `est:${current.establishment.establishment.id}`
-    : current?.place?.google_place_id
-    ? `place:${current.place.google_place_id}`
-    : null;
-  return k ? LS.draft(k) : null;
+  const gid = current?.place?.google_place_id;
+  return gid ? LS.draft(`google:${gid}`) : null;
 }
 
 function saveDraft(partial) {
   const key = draftKey();
   if (!key) return;
   const existing = safeJson(localStorage.getItem(key), {}) || {};
-  const merged = { ...existing, ...partial, _ts: Date.now() };
-  localStorage.setItem(key, JSON.stringify(merged));
+  localStorage.setItem(key, JSON.stringify({ ...existing, ...partial, _ts: Date.now() }));
 }
 
 function loadDraft() {
@@ -203,33 +195,22 @@ function clearDraft() {
 }
 
 /* =========================
-   Rendering helpers
+   Flags + Housing
 ========================= */
-function showPanel() {
-  panel.classList.remove("hidden");
-}
+const HOUSING_OPTIONS = [
+  { v: "", label: "—" },
+  { v: "NON_LOGE", label: "Non logé" },
+  { v: "LOGE", label: "Logé (fourni par l’employeur)" },
+];
 
-function hidePanel() {
-  panel.classList.add("hidden");
-  panel.innerHTML = "";
-}
-
-function renderSuggestions(items) {
-  clearSuggestions();
-  if (!items || !items.length) return;
-
-  const frag = document.createDocumentFragment();
-  for (const it of items) {
-    const placeId = it.place_id || it.placeId || it.google_place_id;
-    const desc = it.description || it.name || "";
-    const div = document.createElement("div");
-    div.className = "sug";
-    div.textContent = desc;
-    div.onclick = () => onSelectSuggestion(placeId);
-    frag.appendChild(div);
-  }
-  suggestions.appendChild(frag);
-}
+const HOUSING_QUALITY_OPTIONS = [
+  { v: "", label: "—" },
+  { v: "TOP", label: "Top" },
+  { v: "OK", label: "OK" },
+  { v: "MOYEN", label: "Moyen" },
+  { v: "MAUVAIS", label: "Mauvais" },
+  { v: "INSALUBRE", label: "Insalubre" },
+];
 
 function renderFlag(label, key, checked) {
   return `
@@ -248,6 +229,17 @@ function collectFlags() {
   return flags;
 }
 
+function flagsToBackend(flags) {
+  // mapping UI -> backend ReviewCreate fields
+  return {
+    coupure: !!flags.coupure,
+    unpaid_overtime: !!flags.heures_sup_non_payees,
+    toxic_manager: !!flags.manager_toxique,
+    harassment: !!flags.harcelement,
+    recommend: !!flags.je_recommande,
+  };
+}
+
 function setFormMsg(text, kind = "ok") {
   const el = $("#formMsg");
   if (!el) return;
@@ -256,53 +248,49 @@ function setFormMsg(text, kind = "ok") {
 }
 
 /* =========================
-   HOUSING constants
+   Backend lookup (THE fix)
 ========================= */
-const HOUSING_OPTIONS = [
-  { v: "", label: "—" },
-  { v: "NON_LOGE", label: "Non logé" },
-  { v: "LOGE", label: "Logé (fourni par l’employeur)" },
-];
-
-const HOUSING_QUALITY_OPTIONS = [
-  { v: "", label: "—" },
-  { v: "TOP", label: "Top" },
-  { v: "OK", label: "OK" },
-  { v: "MOYEN", label: "Moyen" },
-  { v: "MAUVAIS", label: "Mauvais" },
-  { v: "INSALUBRE", label: "Insalubre" },
-];
-
-// affiche joli même si backend envoie une autre string
-function housingLabel(v) {
-  const map = {
-    NON_LOGE: "Non logé",
-    LOGE: "Logé",
-    Top: "Top",
-    OK: "OK",
-    Moyen: "Moyen",
-    Mauvais: "Mauvais",
-    Insalubre: "Insalubre",
-  };
-  return map[v] || v || null;
+async function lookupBundleByGoogleId(googlePlaceId) {
+  if (!googlePlaceId) return null;
+  try {
+    // ✅ ton backend : PATH param
+    return await apiGET(`/establishments/by_google/${encodeURIComponent(googlePlaceId)}`);
+  } catch (e) {
+    if (e.status === 404) return null;
+    throw e;
+  }
 }
 
 /* =========================
    Render Panel
 ========================= */
-function renderPanel(estBundle, isNewFlow) {
+function renderSuggestions(items) {
+  clearSuggestions();
+  if (!items || !items.length) return;
+
+  const frag = document.createDocumentFragment();
+  for (const it of items) {
+    const placeId = it.place_id || it.placeId || it.google_place_id;
+    const desc = it.description || it.name || "";
+    const div = document.createElement("div");
+    div.className = "sug";
+    div.textContent = desc;
+    div.onclick = () => onSelectSuggestion(placeId);
+    frag.appendChild(div);
+  }
+  suggestions.appendChild(frag);
+}
+
+function renderPanel(bundleOrNull, isNewFlow) {
   showPanel();
 
   const place = current.place;
-  const est = estBundle?.establishment ?? null;
-  const reviews = estBundle?.reviews ?? [];
-
+  const bundle = bundleOrNull;
+  const reviews = bundle?.reviews ?? [];
   const avg = computeAverageScore(reviews);
   const avgMeta = scoreMeta(avg);
 
-  const googleRating = place.rating;
-  const googleText = googleRating != null ? googleRating.toFixed(1) : "N/A";
-
+  const googleText = place.rating != null ? place.rating.toFixed(1) : "N/A";
   const typesHtml = (place.types || [])
     .slice(0, 8)
     .map((t) => `<span class="badge badge-na">${escapeHtml(t)}</span>`)
@@ -342,15 +330,9 @@ function renderPanel(estBundle, isNewFlow) {
             const metaBits = [
               r.role ? `Rôle: ${escapeHtml(r.role)}` : null,
               r.contract ? `Contrat: ${escapeHtml(r.contract)}` : null,
-              r.housing ? `Logement: ${escapeHtml(housingLabel(r.housing))}` : null,
-              r.housing_quality
-                ? `Qualité: ${escapeHtml(housingLabel(r.housing_quality))}`
-                : null,
+              r.housing ? `Logement: ${escapeHtml(r.housing)}` : null,
+              r.housing_quality ? `Qualité: ${escapeHtml(r.housing_quality)}` : null,
             ].filter(Boolean);
-
-            const tags = (r.tags || r.flags || [])
-              .map((x) => `<span class="badge badge-na">${escapeHtml(x)}</span>`)
-              .join(" ");
 
             return `
               <div class="review">
@@ -359,12 +341,10 @@ function renderPanel(estBundle, isNewFlow) {
                     <span class="${pillCls}">${escapeHtml(pillText)}</span>
                     ${metaBits.length ? `<span class="small"> • ${metaBits.join(" • ")}</span>` : ""}
                   </div>
-                  <div class="small">${escapeHtml(formatDate(r.created_at || r.createdAt || r.date))}</div>
+                  <div class="small">${escapeHtml(formatDate(r.created_at))}</div>
                 </div>
 
                 <div style="margin-top:8px">${escapeHtml(r.comment || "")}</div>
-
-                ${tags ? `<div class="row" style="margin-top:10px">${tags}</div>` : ""}
 
                 ${
                   r.id
@@ -380,26 +360,26 @@ function renderPanel(estBundle, isNewFlow) {
           .join("");
 
   const draft = loadDraft();
-
   const defaultScore = draft.score ?? "";
   const defaultRole = draft.role ?? "";
   const defaultContract = draft.contract ?? "";
   const defaultComment = draft.comment ?? "";
-  const defaultFlags = draft.flags ?? {};
   const defaultHousing = draft.housing ?? "";
   const defaultHousingQuality = draft.housing_quality ?? "";
-
-  const formTitle = isNewFlow ? "Ajouter à THENA + 1ère review" : "Ajouter une review";
-  const btnText = isNewFlow ? "Ajouter + 1ère review" : "Ajouter la review";
+  const defaultFlags = draft.flags ?? {};
 
   const housingOptionsHtml = HOUSING_OPTIONS.map(
-    (o) => `<option value="${escapeHtml(o.v)}" ${o.v === defaultHousing ? "selected" : ""}>${escapeHtml(o.label)}</option>`
+    (o) =>
+      `<option value="${escapeHtml(o.v)}" ${o.v === defaultHousing ? "selected" : ""}>${escapeHtml(o.label)}</option>`
   ).join("");
 
   const housingQualityOptionsHtml = HOUSING_QUALITY_OPTIONS.map(
     (o) =>
       `<option value="${escapeHtml(o.v)}" ${o.v === defaultHousingQuality ? "selected" : ""}>${escapeHtml(o.label)}</option>`
   ).join("");
+
+  const formTitle = isNewFlow ? "Ajouter à THENA + 1ère review" : "Ajouter une review";
+  const btnText = isNewFlow ? "Ajouter + 1ère review" : "Ajouter la review";
 
   panel.innerHTML = `
     <section class="card">
@@ -443,25 +423,19 @@ function renderPanel(estBundle, isNewFlow) {
 
           <div>
             <label>Logement (optionnel)</label>
-            <select id="housing" class="input">
-              ${housingOptionsHtml}
-            </select>
+            <select id="housing" class="input">${housingOptionsHtml}</select>
           </div>
 
           <div>
             <label>Qualité du logement (optionnel)</label>
-            <select id="housing_quality" class="input">
-              ${housingQualityOptionsHtml}
-            </select>
+            <select id="housing_quality" class="input">${housingQualityOptionsHtml}</select>
             <div class="small">Remplis surtout si tu es logé(e) par l’employeur.</div>
           </div>
         </div>
 
         <div style="margin-top:10px">
           <label>Commentaire (obligatoire)</label>
-          <textarea id="comment" placeholder="Décris ce qui est VRAI sur le terrain..." required>${escapeHtml(
-            defaultComment
-          )}</textarea>
+          <textarea id="comment" placeholder="Décris ce qui est VRAI sur le terrain..." required>${escapeHtml(defaultComment)}</textarea>
         </div>
 
         <div class="row" style="margin-top:10px">
@@ -490,8 +464,6 @@ function renderPanel(estBundle, isNewFlow) {
   const housingEl = $("#housing");
   const housingQualityEl = $("#housing_quality");
   const commentEl = $("#comment");
-  const submitBtn = $("#submitReview");
-  const refreshBtn = $("#refreshBtn");
 
   const saveAll = () => {
     saveDraft({
@@ -514,12 +486,10 @@ function renderPanel(estBundle, isNewFlow) {
     commentEl.addEventListener(ev, saveAll);
   });
 
-  panel.querySelectorAll("input[data-flag]").forEach((cb) => {
-    cb.addEventListener("change", saveAll);
-  });
+  panel.querySelectorAll("input[data-flag]").forEach((cb) => cb.addEventListener("change", saveAll));
 
-  submitBtn.onclick = async () => submitReviewFlow({ isNewFlow });
-  refreshBtn.onclick = async () => refreshCurrent();
+  $("#submitReview").onclick = async () => submitReviewFlow({ isNewFlow });
+  $("#refreshBtn").onclick = async () => refreshCurrent();
 }
 
 /* =========================
@@ -531,22 +501,23 @@ async function onSelectSuggestion(placeId) {
     clearSuggestions();
     localStorage.setItem(LS.currentPlaceId, placeId);
 
+    // 1) Google details
     const placeRaw = await apiGET(`/api/google/place?place_id=${encodeURIComponent(placeId)}`);
     current.place = normalizePlace(placeRaw);
 
     const gid = current.place.google_place_id;
-    const estBundle = await lookupEstablishmentByGoogleId(gid);
+    localStorage.setItem(LS.currentGooglePlaceId, gid);
 
-    current.establishment = estBundle;
-    localStorage.setItem(LS.lastQuery, search.value);
+    // 2) DB bundle
+    const bundle = await lookupBundleByGoogleId(gid);
+    current.bundle = bundle;
 
-    if (!estBundle) {
+    if (!bundle) {
       setHint("Pas encore dans THENA. Ajoute + 1ère review 👇");
       renderPanel(null, true);
     } else {
       setHint("Fiche THENA chargée.");
-      localStorage.setItem(LS.currentEstId, estBundle.establishment.id);
-      renderPanel(estBundle, false);
+      renderPanel(bundle, false);
     }
   } catch (e) {
     console.error(e);
@@ -556,47 +527,34 @@ async function onSelectSuggestion(placeId) {
   }
 }
 
-async function lookupEstablishmentByGoogleId(googlePlaceId) {
-  if (!googlePlaceId) return null;
-
-  try {
-    const data = await tryManyGet([
-      `/establishments/lookup?google_place_id=${encodeURIComponent(googlePlaceId)}`,
-      `/establishments/by_google?google_place_id=${encodeURIComponent(googlePlaceId)}`,
-      `/establishments/find?google_place_id=${encodeURIComponent(googlePlaceId)}`,
-    ]);
-
-    if (data?.establishment && Array.isArray(data?.reviews)) return data;
-
-    if (data?.id) {
-      try {
-        const full = await apiGET(`/establishments/${data.id}`);
-        return full?.establishment ? full : { establishment: data, reviews: [] };
-      } catch {
-        return { establishment: data, reviews: [] };
-      }
-    }
-
-    return null;
-  } catch (e) {
-    if ([404, 422].includes(e.status)) return null;
-    throw e;
-  }
+async function refreshCurrent() {
+  const gid = current?.place?.google_place_id || localStorage.getItem(LS.currentGooglePlaceId);
+  if (!gid) return;
+  const bundle = await lookupBundleByGoogleId(gid);
+  current.bundle = bundle;
+  renderPanel(bundle, !bundle);
 }
 
-async function refreshCurrent() {
-  if (current?.establishment?.establishment?.id) {
-    const id = current.establishment.establishment.id;
-    const fresh = await apiGET(`/establishments/${id}`);
-    current.establishment = fresh?.establishment ? fresh : current.establishment;
-    renderPanel(current.establishment, false);
-    return;
-  }
+async function ensureEstablishmentExists() {
+  // Si bundle existe -> ok
+  if (current.bundle?.establishment?.id) return current.bundle;
 
-  const gid = current?.place?.google_place_id;
-  const estBundle = await lookupEstablishmentByGoogleId(gid);
-  current.establishment = estBundle;
-  renderPanel(estBundle, !estBundle);
+  // Sinon on crée l’establishment (backend renvoie EstablishmentOut)
+  const place = current.place;
+  if (!place?.google_place_id) throw new Error("Google place id manquant");
+
+  await apiPOST("/establishments", {
+    google_place_id: place.google_place_id,
+    name: place.name,
+    address: place.address,
+    google_rating: place.rating,
+    types: place.types || [],
+  });
+
+  // Puis on récupère le bundle complet (reviews + stats)
+  const bundle = await lookupBundleByGoogleId(place.google_place_id);
+  current.bundle = bundle;
+  return bundle;
 }
 
 async function submitReviewFlow({ isNewFlow }) {
@@ -620,64 +578,30 @@ async function submitReviewFlow({ isNewFlow }) {
     return;
   }
 
-  const flags = collectFlags();
-  const tags = Object.entries(flags)
-    .filter(([, v]) => v)
-    .map(([k]) => k);
-
-  // housing logic (optional)
-  const housing = housingEl?.value || null;
-  const housing_quality = housingQualityEl?.value || null;
-
   try {
     setFormMsg("Enregistrement...", "ok");
 
-    // Ensure establishment exists
-    let estBundle = current.establishment;
+    const bundle = await ensureEstablishmentExists();
+    const estId = bundle.establishment.id;
 
-    if (!estBundle) {
-      const place = current.place;
-      const payload = {
-        google_place_id: place.google_place_id,
-        name: place.name,
-        address: place.address,
-        rating: place.rating,
-        types_json: JSON.stringify(place.types || []),
-      };
+    const flags = collectFlags();
 
-      const created = await apiPOST("/establishments", payload);
-      estBundle = created?.establishment ? created : { establishment: created, reviews: [] };
-      current.establishment = estBundle;
-      localStorage.setItem(LS.currentEstId, estBundle.establishment.id);
-    }
-
-    // Create review
-    const estId = estBundle.establishment.id;
-
-    const reviewPayload = {
+    const payload = {
       establishment_id: estId,
-      score,
-      comment,
+      score: score,
+      comment: comment,
       role: roleEl?.value?.trim() || null,
       contract: contractEl?.value || null,
-      housing: housing,
-      housing_quality: housing_quality,
-      tags,
+      housing: housingEl?.value || null,
+      housing_quality: housingQualityEl?.value || null,
+      ...flagsToBackend(flags),
     };
 
-    // Try endpoints: /reviews OR /establishments/{id}/reviews
-    try {
-      await apiPOST("/reviews", reviewPayload);
-    } catch (e) {
-      if ([404, 422].includes(e.status)) {
-        await apiPOST(`/establishments/${estId}/reviews`, reviewPayload);
-      } else {
-        throw e;
-      }
-    }
+    await apiPOST("/reviews", payload);
 
-    const fresh = await apiGET(`/establishments/${estId}`);
-    current.establishment = fresh?.establishment ? fresh : current.establishment;
+    // refresh bundle
+    const fresh = await lookupBundleByGoogleId(current.place.google_place_id);
+    current.bundle = fresh;
 
     // reset form
     scoreEl.value = "";
@@ -689,10 +613,9 @@ async function submitReviewFlow({ isNewFlow }) {
     panel.querySelectorAll("input[data-flag]").forEach((cb) => (cb.checked = false));
 
     clearDraft();
-
     setHint("Ajout terminé ✅");
     setFormMsg("Review ajoutée ✅", "ok");
-    renderPanel(current.establishment, false);
+    renderPanel(fresh, false);
   } catch (e) {
     console.error(e);
     setFormMsg(`Erreur API: ${e.message}`, "err");
@@ -708,13 +631,7 @@ window.deleteReview = async (id) => {
 
   try {
     await apiDELETE(`/reviews/${encodeURIComponent(id)}`);
-
-    if (current?.establishment?.establishment?.id) {
-      const estId = current.establishment.establishment.id;
-      const fresh = await apiGET(`/establishments/${estId}`);
-      current.establishment = fresh?.establishment ? fresh : current.establishment;
-      renderPanel(current.establishment, false);
-    }
+    await refreshCurrent();
   } catch (e) {
     alert(`Erreur suppression: ${e.message}`);
   }
@@ -752,7 +669,7 @@ search.addEventListener("input", () => {
 });
 
 /* =========================
-   Boot restore
+   Boot
 ========================= */
 (function boot() {
   const q = localStorage.getItem(LS.lastQuery);
